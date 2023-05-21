@@ -13,7 +13,7 @@ class ReLULayer(object):
 
     def backward(self, upstream_gradient):
         # compute the derivative of ReLU from upstream_gradient and the stored input
-        downstream_gradient = upstream_gradient * (input > 0) # your code here
+        downstream_gradient = upstream_gradient * (self.input > 0) # your code here
         return downstream_gradient
 
     def update(self, learning_rate):
@@ -29,15 +29,19 @@ class OutputLayer(object):
         # remember the input for later backpropagation
         self.input = input
         # return the softmax of the input
-        exp_inputs = np.exp(input)
-        softmax =  exp_inputs / np.sum(exp_inputs, axis=0, keepdims=True) # your code here
-        return softmax
+        e_x = np.exp(input - np.max(input))
+        return e_x / e_x.sum() # your code here
+        
 
     def backward(self, predicted_posteriors, true_labels):
         # return the loss derivative with respect to the stored inputs
         # (use cross-entropy loss and the chain rule for softmax,
         #  as derived in the lecture) 
-        print(predicted_posteriors.shape, self.input.shape, true_labels.shape)
+        #print(predicted_posteriors.shape, self.input.shape, true_labels.shape)
+        #one hot encode true_labels
+        order = np.array(list(set(true_labels)))
+        one_hot = np.eye(len(order))
+        true_labels = one_hot[order[true_labels]]
         downstream_gradient = predicted_posteriors * (self.input - true_labels)
         return downstream_gradient
 
@@ -65,9 +69,10 @@ class LinearLayer(object):
     def backward(self, upstream_gradient):
         # compute the derivative of the weights from
         # upstream_gradient and the stored input
-        self.grad_weights = np.dot(upstream_gradient, self.input.T)
-        self.grad_bias = np.sum(upstream_gradient, axis=1, keepdims=True)
-        downstream_gradient = np.dot(self.weights.T, upstream_gradient)
+        
+        self.grad_weights = np.matmul(self.input.T,upstream_gradient)
+        self.grad_bias = np.sum(upstream_gradient, axis=0, keepdims=True)
+        downstream_gradient = np.dot(upstream_gradient,self.weights.T)
         # compute the downstream gradient to be passed to the preceding layer
         
         return downstream_gradient
@@ -122,14 +127,11 @@ class MLP(object):
         batch_size = predicted_posteriors.shape[0]
 
         # Compute the gradient of the output layer using the predicted posteriors and true classes
-        grad_loss = predicted_posteriors.copy()
-        grad_loss[np.arange(batch_size), true_classes] -= 1
-        grad_loss /= batch_size
+        upstream_gradient = self.layers[-1].backward(predicted_posteriors,true_classes)
 
         # Backpropagate the gradients through the layers
-        upstream_gradient = grad_loss
-        for layer in reversed(self.layers):
-            upstream_gradient = layer.backward(upstream_gradient,true_classes)
+        for layer in reversed(self.layers[:-1]):
+            upstream_gradient = layer.backward(upstream_gradient)
 
         return upstream_gradient
 
@@ -142,7 +144,7 @@ class MLP(object):
     def train(self, x, y, n_epochs, batch_size, learning_rate):
         N = len(x)
         n_batches = N // batch_size
-        for i in range(n_epochs):
+        for i in range(n_epochs-1):
             # print("Epoch", i)
             # reorder data for every epoch
             # (i.e. sample mini-batches without replacement)
@@ -160,6 +162,7 @@ class MLP(object):
 ##################################
 
 if __name__=="__main__":
+    np.random.seed(0)
 
     # set training/test set size
     N = 2000
@@ -191,8 +194,9 @@ if __name__=="__main__":
     # test
     predicted_posteriors = network.forward(X_test)
     # determine class predictions from posteriors by winner-takes-all rule
-    predicted_classes = ... # your code here
+    
+    predicted_classes =  np.argmax(predicted_posteriors,axis=1)# your code here
     # compute and output the error rate of predicted_classes
-    error_rate = ... # your code here
+    error_rate = sum(predicted_classes != Y_test)/len(Y_test) # your code here
     print("error rate:", error_rate)
 
