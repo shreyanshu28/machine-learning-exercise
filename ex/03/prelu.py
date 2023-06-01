@@ -119,7 +119,7 @@ def model(x, w_h, w_h2, w_o, a):
 # input shape is (B, 784)
 w_h = init_weights((784, 625))
 # hidden layer with 625 neurons
-w_h2 = init_weights((25, 625))
+w_h2 = init_weights((625, 625))
 # hidden layer with 625 neurons
 w_o = init_weights((625, 10))
 # output shape is (B, 10)
@@ -129,7 +129,7 @@ a = init_weights((100,625))
 optimizer = RMSprop(params=[w_h, w_h2, w_o, a])
 
 
-n_epochs = 6
+n_epochs = 3
 
 train_loss = []
 test_loss = []
