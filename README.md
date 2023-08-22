@@ -13,4 +13,5 @@ To achieve this goal, we have the following steps and tasks:
 We have a deadline of **31st August 2023** for this project. We should have a workable Q-learning agent by then. For the first three weeks, we will focus on developing the reward shaping function, which is a key component of our project. We need to design the function such that it gives high positive reward for successful task completion, and encourages exploration and exploitation of the state-action space.
 
 # URLS
+[Bomberman Repo]([url](https://github.com/ukoethe/bomberman_rl)https://github.com/ukoethe/bomberman_rl)
 [HandyRL]([url](https://github.com/DeNA/HandyRL)https://github.com/DeNA/HandyRL)
