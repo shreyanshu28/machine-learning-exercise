@@ -11,3 +11,6 @@ To achieve this goal, we have the following steps and tasks:
 - **Step 5**: Add a rule-based agent as another opponent for our agent. We will let our agent play with the rule-based agent and see how it adapts to different strategies.
 
 We have a deadline of **31st August 2023** for this project. We should have a workable Q-learning agent by then. For the first three weeks, we will focus on developing the reward shaping function, which is a key component of our project. We need to design the function such that it gives high positive reward for successful task completion, and encourages exploration and exploitation of the state-action space.
+
+##URLS
+[HandyRL]([url](https://github.com/DeNA/HandyRL)https://github.com/DeNA/HandyRL)
