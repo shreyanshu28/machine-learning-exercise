@@ -1,2 +1,2 @@
 ex/03/MNIST
-./venv
+venv/*
