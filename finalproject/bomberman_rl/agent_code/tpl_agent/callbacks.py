@@ -30,7 +30,7 @@ def setup(self):
         self.logger.info("Loading model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
             self.model = pickle.load(file)
-
+    print("Setup done.")
 
 def act(self, game_state: dict) -> str:
     """
@@ -47,6 +47,10 @@ def act(self, game_state: dict) -> str:
         self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        #use loaded model
+        # action = self.model.get_action(game_state)
+        # return action
+
 
     self.logger.debug("Querying model for action.")
     return np.random.choice(ACTIONS, p=self.model)
