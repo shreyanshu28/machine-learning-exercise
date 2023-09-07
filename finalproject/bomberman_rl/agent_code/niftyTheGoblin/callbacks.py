@@ -23,15 +23,15 @@ def setup(self):
     self.current_round = 0
     self.walkedTiles = []
 
-    continueTraining = False
+    continueTraining = True
     model_path = 'tmp/'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
         print("Created model path.")
-    print(os.getcwd())
+
     if (not continueTraining and self.train): # or not os.path.isfile(model_path)
         self.logger.info("Setting up model from scratch.")
-        print("Setting up model from scratch!")
+        print("Setting up model from scratch.")
         self.agent = Agent(gamma=0.1, epsilon=1., lr=1e-7,
                               input_dims=(17, 17, 1), eps_dec=1e-5,
                               n_actions=6, max_mem_size=100000, batch_size=64,
@@ -51,7 +51,7 @@ def setup(self):
                            n_actions=6, max_mem_size=100000, batch_size=64,
                            eps_end=0.1, replace=2000, fname=model_path, train=self.train, use_cpu=True)
         self.agent.load_model()
-    print("Setup done.")
+
 
 def act(self, game_state: dict) -> str:
     # observation = state_to_features(game_state)

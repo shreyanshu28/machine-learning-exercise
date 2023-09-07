@@ -51,9 +51,9 @@ def setup_training(self):
      :param self: This object is passed to all callbacks and you can set arbitrary values.
      """
     self.train_every = 1
-    self.save_every = 20
-    self.warmup = 5
-    s.MAX_STEPS = 200
+    self.save_every = 100
+    self.warmup = 20
+    s.MAX_STEPS = 400
 
 
 
@@ -122,21 +122,21 @@ def reward_from_events(self, events: List[str]) -> int:
         # e.WAITED: -0.02,
         # e.GOT_KILLED: -1,
         # e.KILLED_SELF: -5
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-        e.BOMB_DROPPED: 0.002,
-        e.COIN_FOUND: 0.01,
-        e.SURVIVED_ROUND: 0.5,
-        e.CRATE_DESTROYED: 0.2,
-        e.MOVED_LEFT: 0.001,
-        e.MOVED_RIGHT: 0.001,
-        e.MOVED_UP: 0.001,
-        e.MOVED_DOWN: 0.001,
-        e.INVALID_ACTION: -0.02,
-        e.WAITED: -0.01,
-        e.GOT_KILLED: -1,
-        e.KILLED_SELF: -1,
-        NEW_TILE_FOUND: 2
+        e.COIN_COLLECTED: 50,
+        e.KILLED_OPPONENT: 200,
+        e.BOMB_DROPPED: 5,
+        e.COIN_FOUND: 10,
+        e.SURVIVED_ROUND: 100,
+        e.CRATE_DESTROYED: 10,
+        e.MOVED_LEFT: 2,
+        e.MOVED_RIGHT: 2,
+        e.MOVED_UP: 2,
+        e.MOVED_DOWN: 2,
+        e.INVALID_ACTION: -2,
+        e.WAITED: -10,
+        e.GOT_KILLED: -500,
+        e.KILLED_SELF: -1000,
+        NEW_TILE_FOUND: 10
     }
     reward_sum = 0
     for event in events:
@@ -151,7 +151,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.agent.store_transition(state_to_features(last_game_state), ACTIONS.index(last_action),
                                 reward_from_events(self, events), state_to_features(last_game_state), True)
 
-    print("end of round....")
+
     if last_game_state['round'] % (self.save_every) == 0:
         self.agent.save_model()
 
@@ -187,7 +187,7 @@ def state_to_features(state: dict) -> np.array:
 
 
 class DQN(nn.Module):
-    def __init__(self, lr, input_dims, fc2_dims, n_actions, name, chkpt_dr, use_cpu=False):
+    def __init__(self, lr, input_dims, fc2_dims, n_actions, name, chkpt_dr, device):
         super(DQN, self).__init__()
         self.checkpoint_dr = chkpt_dr
         self.chkptf = os.path.join(self.checkpoint_dr, name)
@@ -206,11 +206,9 @@ class DQN(nn.Module):
         # self.loss = nn.MSELoss()
         self.loss = nn.SmoothL1Loss()
         self.dropout = nn.Dropout(0.3)
-        if not use_cpu:
-            self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        else:
-            self.device = 'cpu'
-        print("Using device: ", self.device, " for training")
+        self.device = device
+        
+        # print("Using device: ", self.device, " for training")
         self.to(self.device)
 
     def forward(self, state):
@@ -252,11 +250,16 @@ class Agent:
         self.use_cpu = use_cpu
         self.train = train
 
+        if not use_cpu:
+            self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        else:
+            self.device = 'cpu'
+
         self.Q_eval = DQN(self.lr, n_actions=n_actions, input_dims=input_dims, fc2_dims=256,
-                          name='niftyTheGoblin_online5.pt', chkpt_dr=self.model_file, use_cpu=self.use_cpu)
+                          name='niftyTheGoblin_online5.pt', chkpt_dr=self.model_file, device = self.device)
 
         self.Q_target = DQN(self.lr, n_actions=n_actions, input_dims=input_dims, fc2_dims=256,
-                            name='niftyTheGoblin_offline5.pt', chkpt_dr=self.model_file, use_cpu=self.use_cpu)
+                            name='niftyTheGoblin_offline5.pt', chkpt_dr=self.model_file, device = self.device)
 
         self.state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
         self.new_state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
@@ -278,7 +281,7 @@ class Agent:
         observation = state_to_features(game_state)
         if self.train:
             if np.random.random() > self.epsilon:
-                state = torch.tensor([observation]).to(self.Q_eval.device)
+                state = torch.tensor(np.array([observation])).to(self.device)
                 actions = self.Q_eval.forward(state)
                 action = torch.argmax(actions).item()
                 # print('deep action')
@@ -290,7 +293,7 @@ class Agent:
                 action = ACTIONS.index(a)
                 # print('random action')
         else:
-            state = torch.tensor([observation]).to(self.Q_eval.device)
+            state = torch.tensor(np.array([observation])).to(self.device)
             actions = self.Q_eval.forward(state)
             action = torch.argmax(actions).item()
         return action
@@ -307,10 +310,10 @@ class Agent:
 
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
-        state_batch = torch.tensor(self.state_memory[batch]).to(self.Q_eval.device)
-        new_state_batch = torch.tensor(self.new_state_memory[batch]).to(self.Q_eval.device)
-        reward_batch = torch.tensor(self.reward_memory[batch]).to(self.Q_eval.device)
-        terminal_batch = torch.tensor(self.terminal_memory[batch]).to(self.Q_eval.device)
+        state_batch = torch.tensor(self.state_memory[batch]).to(self.device)
+        new_state_batch = torch.tensor(self.new_state_memory[batch]).to(self.device)
+        reward_batch = torch.tensor(self.reward_memory[batch]).to(self.device)
+        terminal_batch = torch.tensor(self.terminal_memory[batch]).to(self.device)
 
         action_batch = self.action_memory[batch]
 
@@ -320,7 +323,7 @@ class Agent:
         q_target = reward_batch + self.gamma * torch.max(q_next, dim=1)[0].detach()
 
 
-        loss = self.Q_eval.loss(q_eval, q_target).to(self.Q_eval.device)
+        loss = self.Q_eval.loss(q_eval, q_target).to(self.device)
         loss.backward()
         self.Q_eval.optimizer.step()
 
