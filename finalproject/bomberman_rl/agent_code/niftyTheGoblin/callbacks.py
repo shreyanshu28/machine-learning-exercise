@@ -23,7 +23,7 @@ def setup(self):
     self.current_round = 0
     self.walkedTiles = []
 
-    continueTraining = True
+    continueTraining = False
     model_path = 'tmp/'
     if not os.path.exists(model_path):
         os.makedirs(model_path)
