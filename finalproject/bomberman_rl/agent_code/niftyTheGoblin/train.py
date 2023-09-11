@@ -1,3 +1,14 @@
+'''
+To play against random agents: 
+python main.py play --agents niftyTheGoblin random_agent random_agent random_agent --skip-frames
+
+To play against rule based agents:
+python main.py play --agents niftyTheGoblin rule_based_agent rule_based_agent rule_based_agent --skip-frames
+
+To train the agent for n-rounds against rule based agents:
+python main.py play --my-agent niftyTheGoblin --train 1 --n-rounds 1000 --no-gui 
+
+'''
 from collections import namedtuple, deque
 
 import pickle
@@ -51,9 +62,9 @@ def setup_training(self):
      :param self: This object is passed to all callbacks and you can set arbitrary values.
      """
     self.train_every = 1
-    self.save_every = 100
-    self.warmup = 20
-    s.MAX_STEPS = 400
+    self.save_every = 10
+    self.warmup = 0
+    s.MAX_STEPS = 200
 
 
 
@@ -122,20 +133,20 @@ def reward_from_events(self, events: List[str]) -> int:
         # e.WAITED: -0.02,
         # e.GOT_KILLED: -1,
         # e.KILLED_SELF: -5
-        e.COIN_COLLECTED: 50,
-        e.KILLED_OPPONENT: 200,
-        e.BOMB_DROPPED: 5,
-        e.COIN_FOUND: 10,
-        e.SURVIVED_ROUND: 100,
-        e.CRATE_DESTROYED: 10,
+        e.COIN_COLLECTED: 100,
+        e.KILLED_OPPONENT: 500,
+        e.BOMB_DROPPED: 10,
+        e.COIN_FOUND: 5,
+        e.SURVIVED_ROUND: 50,
+        e.CRATE_DESTROYED: 5,
         e.MOVED_LEFT: 2,
         e.MOVED_RIGHT: 2,
         e.MOVED_UP: 2,
         e.MOVED_DOWN: 2,
-        e.INVALID_ACTION: -2,
-        e.WAITED: -10,
-        e.GOT_KILLED: -500,
-        e.KILLED_SELF: -1000,
+        e.INVALID_ACTION: -40,
+        e.WAITED: 0,
+        e.GOT_KILLED: -100,
+        e.KILLED_SELF: -200,
         NEW_TILE_FOUND: 10
     }
     reward_sum = 0
