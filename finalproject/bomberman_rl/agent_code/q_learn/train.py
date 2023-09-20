@@ -2,9 +2,12 @@ from collections import namedtuple, deque
 
 import pickle
 from typing import List
-
+import numpy as np
 import events as e
 from .callbacks import state_to_features
+
+
+ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 # This is only an example!
 Transition = namedtuple('Transition',
@@ -29,6 +32,8 @@ def setup_training(self):
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
+    self.alpha = 0.2
+    self.gamma = 0.95
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -55,7 +60,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
+    transition = Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events))
+    update_Q(self,transition)
+    self.transitions.append(transition)
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -75,10 +82,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
 
     # print("end of round")
+    #print(last_game_state[])
     # Store the model
     with open("my-saved-model.pt", "wb") as file:
-        pickle.dump(self.model, file)
-
+        pickle.dump(self.Q, file)
 
 def reward_from_events(self, events: List[str]) -> int:
     """
@@ -88,9 +95,34 @@ def reward_from_events(self, events: List[str]) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-        PLACEHOLDER_EVENT: -.1  # idea: the custom event is bad
+        # e.COIN_COLLECTED: 1,
+        # e.KILLED_OPPONENT: 5,
+        # e.BOMB_DROPPED: 0.001,
+        # e.COIN_FOUND: 0.01,
+        # e.SURVIVED_ROUND: 0.5,
+        # e.CRATE_DESTROYED: 0.4,
+        # e.MOVED_LEFT: 0.01,
+        # e.MOVED_RIGHT: 0.01,
+        # e.MOVED_UP: 0.01,
+        # e.MOVED_DOWN: 0.01,
+        # e.INVALID_ACTION: -2,
+        # e.WAITED: -0.02,
+        # e.GOT_KILLED: -1,
+        # e.KILLED_SELF: -5
+        e.COIN_COLLECTED: 100,
+        e.KILLED_OPPONENT: 500,
+        e.BOMB_DROPPED: 10,
+        e.COIN_FOUND: 5,
+        e.SURVIVED_ROUND: 50,
+        e.CRATE_DESTROYED: 5,
+        e.MOVED_LEFT: 2,
+        e.MOVED_RIGHT: 2,
+        e.MOVED_UP: 2,
+        e.MOVED_DOWN: 2,
+        e.INVALID_ACTION: -40,
+        e.WAITED: 0,
+        e.GOT_KILLED: -100,
+        e.KILLED_SELF: -200  # idea: the custom event is bad
     }
     reward_sum = 0
     for event in events:
@@ -98,3 +130,13 @@ def reward_from_events(self, events: List[str]) -> int:
             reward_sum += game_rewards[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
+
+def update_Q(self, Transition):
+    if Transition[0] not in self.Q:
+        self.Q[Transition[0]] = np.zeros(6)
+    if Transition[2] not in self.Q:
+        self.Q[Transition[2]] = np.zeros(6)
+
+    #print(Transition[0], ACTIONS.index(Transition[1]))
+    action_index = ACTIONS.index(Transition[1])
+    self.Q[Transition[0]][action_index] += self.alpha*(Transition[3] + self.gamma*np.max(self.Q[Transition[2]]) - self.Q[Transition[0]][action_index])

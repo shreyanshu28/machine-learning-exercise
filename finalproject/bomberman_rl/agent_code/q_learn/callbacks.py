@@ -1,6 +1,7 @@
 import os
 import pickle
 import random
+import hashlib
 
 import numpy as np
 
@@ -22,14 +23,15 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if self.train or not os.path.isfile("my-saved-model.pt"):
+    continue_training = False
+    if not os.path.isfile("my-saved-model.pt"):
         self.logger.info("Setting up model from scratch.")
         weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+        self.Q = {}
     else:
         self.logger.info("Loading model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
-            self.model = pickle.load(file)
+            self.Q = pickle.load(file)
     print("Setup done.")
 
 def act(self, game_state: dict) -> str:
@@ -43,18 +45,21 @@ def act(self, game_state: dict) -> str:
     """
     # todo Exploration vs exploitation
     random_prob = .1
-    state_to_features(game_state)
+    #print(hashlib.sha256(state_to_features(game_state)).hexdigest())
     if self.train and random.random() < random_prob:
         self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .2, .0])
+        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
         #use loaded model
-        # action = self.model.get_action(game_state)
+
         # return action
 
+    observation = state_to_features(game_state)
+    if observation not in self.Q:
+        return np.random.choice(ACTIONS,p=[0.25,0.25,0.25,0.25,0,0])
     
     self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
+    return ACTIONS[np.argmax(self.Q[observation])]
 
 
 def state_to_features(state: dict) -> np.array:
@@ -76,7 +81,7 @@ def state_to_features(state: dict) -> np.array:
         return None
 
     
-#def state_to_features(state: dict) -> np.array:
+    #def state_to_features(state: dict) -> np.array:
     cols, rows = state['field'].shape[0], state['field'].shape[1]
     observation = np.zeros([rows, cols], dtype=np.float32)
 
@@ -105,5 +110,5 @@ def state_to_features(state: dict) -> np.array:
     #observation += np.where(state['explosion_map'], state['explosion_map'] * -2, state['explosion_map']).reshape(rows, cols)
     #print(state['explosion_map'])
     #print(np.where(state['explosion_map'] != 0)[0])
-    print(np.array(observation))
-    return observation
+    #print(np.array(observation))
+    return hashlib.sha256(observation).hexdigest()
