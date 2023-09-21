@@ -1,4 +1,5 @@
 from collections import namedtuple, deque
+import json
 
 import pickle
 from typing import List
@@ -14,7 +15,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 10  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 5000  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # Events
@@ -33,7 +34,8 @@ def setup_training(self):
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
     self.alpha = 0.2
-    self.gamma = 0.95
+    self.gamma = 0.7
+    self.total_step = 0
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -60,10 +62,15 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
+    
     transition = Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events))
-    update_Q(self,transition)
     self.transitions.append(transition)
-
+    self.total_step += 1
+    if self.total_step % TRANSITION_HISTORY_SIZE == 0:
+        for trans in self.transitions:
+            update_Q(self,trans)
+        with open("save_files/my-saved-model.json","w") as file:
+            json.dump(self.Q, file)
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -79,13 +86,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
+    #self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
 
     # print("end of round")
     #print(last_game_state[])
     # Store the model
-    with open("my-saved-model.pt", "wb") as file:
-        pickle.dump(self.Q, file)
+    #if last_game_state['']:
+    #print(type(self.Q))
+    
 
 def reward_from_events(self, events: List[str]) -> int:
     """
@@ -101,28 +109,15 @@ def reward_from_events(self, events: List[str]) -> int:
         # e.COIN_FOUND: 0.01,
         # e.SURVIVED_ROUND: 0.5,
         # e.CRATE_DESTROYED: 0.4,
-        # e.MOVED_LEFT: 0.01,
-        # e.MOVED_RIGHT: 0.01,
-        # e.MOVED_UP: 0.01,
-        # e.MOVED_DOWN: 0.01,
+         e.MOVED_LEFT: 0.01,
+         e.MOVED_RIGHT: 0.01,
+         e.MOVED_UP: 0.01,
+         e.MOVED_DOWN: 0.01,
         # e.INVALID_ACTION: -2,
-        # e.WAITED: -0.02,
+         e.WAITED: -0.02,
         # e.GOT_KILLED: -1,
         # e.KILLED_SELF: -5
-        e.COIN_COLLECTED: 100,
-        e.KILLED_OPPONENT: 500,
-        e.BOMB_DROPPED: 10,
-        e.COIN_FOUND: 5,
-        e.SURVIVED_ROUND: 50,
-        e.CRATE_DESTROYED: 5,
-        e.MOVED_LEFT: 2,
-        e.MOVED_RIGHT: 2,
-        e.MOVED_UP: 2,
-        e.MOVED_DOWN: 2,
-        e.INVALID_ACTION: -40,
-        e.WAITED: 0,
-        e.GOT_KILLED: -100,
-        e.KILLED_SELF: -200  # idea: the custom event is bad
+        e.COIN_COLLECTED: 10
     }
     reward_sum = 0
     for event in events:
@@ -133,10 +128,10 @@ def reward_from_events(self, events: List[str]) -> int:
 
 def update_Q(self, Transition):
     if Transition[0] not in self.Q:
-        self.Q[Transition[0]] = np.zeros(6)
+        self.Q[Transition[0]] = [0] * 6
     if Transition[2] not in self.Q:
-        self.Q[Transition[2]] = np.zeros(6)
+        self.Q[Transition[2]] = [0] * 6
 
-    #print(Transition[0], ACTIONS.index(Transition[1]))
+    
     action_index = ACTIONS.index(Transition[1])
     self.Q[Transition[0]][action_index] += self.alpha*(Transition[3] + self.gamma*np.max(self.Q[Transition[2]]) - self.Q[Transition[0]][action_index])

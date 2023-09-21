@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 import random
 import hashlib
 
@@ -24,14 +25,15 @@ def setup(self):
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
     continue_training = False
-    if not os.path.isfile("my-saved-model.pt"):
+    file_path = "save_files/my-saved-model.json"
+    if not os.path.isfile(file_path):
         self.logger.info("Setting up model from scratch.")
         weights = np.random.rand(len(ACTIONS))
         self.Q = {}
     else:
         self.logger.info("Loading model from saved state.")
-        with open("my-saved-model.pt", "rb") as file:
-            self.Q = pickle.load(file)
+        with open(file_path, "rb") as file:
+            self.Q = json.load(file)
     print("Setup done.")
 
 def act(self, game_state: dict) -> str:
@@ -56,7 +58,7 @@ def act(self, game_state: dict) -> str:
 
     observation = state_to_features(game_state)
     if observation not in self.Q:
-        return np.random.choice(ACTIONS,p=[0.25,0.25,0.25,0.25,0,0])
+        return np.random.choice(ACTIONS,p=[.2, .2, .2, .2, .1, .1])
     
     self.logger.debug("Querying model for action.")
     return ACTIONS[np.argmax(self.Q[observation])]
@@ -82,28 +84,32 @@ def state_to_features(state: dict) -> np.array:
 
     
     #def state_to_features(state: dict) -> np.array:
-    cols, rows = state['field'].shape[0], state['field'].shape[1]
+    rows,cols = state['field'].shape[0], state['field'].shape[1]
     observation = np.zeros([rows, cols], dtype=np.float32)
 
-    observation[:, :] = state['field']*10
+    observation = state['field']*10
 
     if state['coins']:
         coins_x, coins_y = zip(*state['coins'])
-        observation[list(coins_y), list(coins_x)] = 20  # revealed coins
+        observation[list(coins_x), list(coins_y)] = 20  # revealed coins
 
     if state['bombs']:
         bombs_xy, bombs_t = zip(*state['bombs'])
         bombs_x, bombs_y = zip(*bombs_xy)
-        observation[list(bombs_y), list(bombs_x)] = [bt+1 for bt in  list(bombs_t)]
+        observation[list(bombs_x), list(bombs_y)] = [bt+1 for bt in  list(bombs_t)]
 
     if state['self']:  # let's hope there is...
         _, _, _, (self_x, self_y) = state['self']
-        observation[self_y, self_x] = 30
+        observation[self_x, self_y] = 30
 
     if state['others']:
         _, _, others_bomb, others_xy = zip(*state['others'])
         others_x, others_y = zip(*others_xy)
-        observation[others_y, others_x] = -40
+        for i in range(others_bomb):
+            observation[others_x[i], others_y[i]] = -40 if others_bomb[i] else -30
+        
+            
+                
         # missing if others can place bomb
 
     observation[np.where(state['explosion_map'] != 0)[1],np.where(state['explosion_map'] != 0)[0]] = -2
