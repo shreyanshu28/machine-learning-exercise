@@ -25,14 +25,16 @@ def setup(self):
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
     continue_training = False
-    self.limit_to = 5
-    file_path = "save_files/my-saved-model.json"
+    self.limit_to = 3
+    #file_path = f"save_files/my-saved-model_view{self.limit_to}_test.json"
+    file_path = f"save_files/my-saved-model_view{self.limit_to}.json"
     if not os.path.isfile(file_path):
         self.logger.info("Setting up model from scratch.")
         weights = np.random.rand(len(ACTIONS))
         self.Q = {}
     else:
         self.logger.info("Loading model from saved state.")
+        print(f"loaded: {file_path}")
         with open(file_path, "rb") as file:
             self.Q = json.load(file)
     print("Setup done.")
@@ -117,10 +119,32 @@ def state_to_features(self,state: dict) -> np.array:
         observation = observation[max(1,self_x - self.limit_to):min(self_x + self.limit_to,rows-1),\
                                    max(1,self_y - self.limit_to):min(self_y + self.limit_to,cols-1)]
 
+    def euclid(list, tuple):
+        return [np.sqrt((list[i][0] - tuple[0])**2 + (list[i][1] - tuple[1])**2) for i in range(len(list))]
+    
+    playerLoc = state['self'][3]
+    
+    dist_to_enemy= -1
+    dist_to_coin = -1
+    dist_to_bomb = -1
+
+    if state['others']:
+        others = [xy for (n, s, b, xy) in state['others']]
+        dist_to_enemy = min(euclid(others,playerLoc))
+
+    if state['coins']:
+        dist_to_coin = min(euclid(state['coins'], playerLoc))
+
+    if state['bombs']:
+        bomb_xy_list = [xy for (xy,_) in state['bombs']]
+        dist_to_bomb = min(euclid(bomb_xy_list,playerLoc))
+        
     #observation += np.where(state['explosion_map'], state['explosion_map'] * -2, state['explosion_map']).reshape(rows, cols)
     #print(state['explosion_map'])
     #print(np.where(state['explosion_map'] != 0)[0])
     #print(max(0,self_x- self.limit_to))
     #print(observation2)
     #observation2 = list(observation2)
-    return hashlib.sha256(observation.tostring()).hexdigest()
+    #return hashlib.sha256(observation.tostring()).hexdigest()
+    #print(dist_to_bomb,dist_to_coin,dist_to_enemy)
+    return tuple((observation.tostring(),dist_to_coin,dist_to_enemy,dist_to_bomb)).__hash__()

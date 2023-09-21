@@ -15,8 +15,10 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 15000  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 30000  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
+REDUCED_DISTANCE_TO_NEXT_COIN = "REDUCED_DISTANCE_TO_COIN"
+INCREASED_DISTANCE_TO_NEXT_COIN = "INCREASED_DISTANCE_TO_COIN"
 
 # Events
 PLACEHOLDER_EVENT = "PLACEHOLDER"
@@ -33,7 +35,7 @@ def setup_training(self):
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
-    self.alpha = 0.2
+    self.alpha = 0.4
     self.gamma = 0.7
     self.total_step = 0
 
@@ -58,6 +60,16 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     # Idea: Add your own events to hand out rewards
+    def euclid(list, tuple):
+        return [np.sqrt((list[i][0] - tuple[0])**2 + (list[i][1] - tuple[1])**2) for i in range(len(list))]
+    
+    if (self_action in ['UP', 'DOWN', 'LEFT', 'RIGHT']):
+        oldPlayerLoc, newPlayerLoc = old_game_state['self'][3], new_game_state['self'][3]
+        if len(old_game_state['coins']) != 0 and len(new_game_state['coins']) != 0:
+            if min(euclid(old_game_state['coins'], oldPlayerLoc)) > min(euclid(new_game_state['coins'], newPlayerLoc)):
+                events.append(REDUCED_DISTANCE_TO_NEXT_COIN)
+            else:
+                events.append(INCREASED_DISTANCE_TO_NEXT_COIN)
     if ...:
         events.append(PLACEHOLDER_EVENT)
 
@@ -114,10 +126,12 @@ def reward_from_events(self, events: List[str]) -> int:
         e.MOVED_UP: 0.01,
         e.MOVED_DOWN: 0.01,
         # e.INVALID_ACTION: -2,
-        e.WAITED: -0.02,
+        e.WAITED: -0.5,
         # e.GOT_KILLED: -1,
         e.KILLED_SELF: -3,
-        e.COIN_COLLECTED: 10
+        e.COIN_COLLECTED: 10,
+        REDUCED_DISTANCE_TO_NEXT_COIN: .2,
+        INCREASED_DISTANCE_TO_NEXT_COIN: -.001
     }
     reward_sum = 0
     for event in events:
@@ -135,3 +149,43 @@ def update_Q(self, Transition):
     
     action_index = ACTIONS.index(Transition[1])
     self.Q[Transition[0]][action_index] = (1-self.alpha)*self.Q[Transition[0]][action_index] + self.alpha*(Transition[3] + self.gamma*np.max(self.Q[Transition[2]]) - self.Q[Transition[0]][action_index])
+
+### outdated
+
+def add_other_transitions(self,old_game_state, new_game_state):
+
+    ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+    old_me = old_game_state['self']
+    new_me = new_game_state['self']
+    type(new_me)
+    old_others_name, old_others_score, old_others_bomb, old_others_xy = zip(*old_game_state['others'])
+    new_others_name, new_others_score, new_others_bomb, new_others_xy = zip(*new_game_state['others'])
+    #for i in range(len(old_others_name)):
+    #    observation[others_x[i], others_y[i]] = -40 if others_bomb[i] else -30
+
+    if old_game_state['others']:
+        for i in range(len(old_others_name)):
+            action = ""
+            if old_others_name[i] in new_others_name:
+                if old_others_bomb[i] > new_others_bomb[i]:
+                    action = 'BOMB'
+                elif old_others_xy[i][1] == new_others_xy[i][1]+1:
+                    action = 'UP'
+                elif old_others_xy[i][0] == new_others_xy[i][0]-1:
+                    action = 'RIGHT'
+                elif old_others_xy[i][1] == new_others_xy[i][1]-1:
+                    action = 'DOWN'
+                elif old_others_xy[i][0] == new_others_xy[i][0]+1:
+                    action = 'LEFT'
+                else:
+                    action = 'WAIT'
+                old_temp_switched = old_game_state
+                new_temp_switched = new_game_state
+                old_temp_switched['others'].append(old_me)
+                new_temp_switched['others'].append(new_me)
+
+                print(old_others_xy[i], new_others_xy[i], action)
+                self.transitions.append()
+                self.total_step += 1
+            
+    
