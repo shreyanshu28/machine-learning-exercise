@@ -5,9 +5,11 @@ import random
 import hashlib
 
 import numpy as np
-
+from . import helper as h
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+
+# bomb info
 
 
 def setup(self):
@@ -25,18 +27,19 @@ def setup(self):
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
     continue_training = False
-    self.limit_to = 3
+    self.limit_to = 2
     #file_path = f"save_files/my-saved-model_view{self.limit_to}_test.json"
-    file_path = f"save_files/my-saved-model_view{self.limit_to}.json"
-    if not os.path.isfile(file_path):
+    self.file_path = f"save_files/my-saved-model_view{self.limit_to}.pt"
+    if not os.path.isfile(self.file_path):
         self.logger.info("Setting up model from scratch.")
         weights = np.random.rand(len(ACTIONS))
         self.Q = {}
     else:
         self.logger.info("Loading model from saved state.")
-        print(f"loaded: {file_path}")
-        with open(file_path, "rb") as file:
-            self.Q = json.load(file)
+        print(f"loaded: {self.file_path}")
+        with open(self.file_path, "rb") as file:
+            self.Q = pickle.load(file)
+        print(*list(self.Q.items())[:10], sep="\n")
     print("Setup done.")
 
 def act(self, game_state: dict) -> str:
@@ -49,20 +52,22 @@ def act(self, game_state: dict) -> str:
     :return: The action to take as a string.
     """
     # todo Exploration vs exploitation
-    random_prob = .1
+    random_prob = 0.1
     #print(hashlib.sha256(state_to_features(game_state)).hexdigest())
     if self.train and random.random() < random_prob:
         self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .15, .05])
         #use loaded model
 
         # return action
 
     observation = state_to_features(self,game_state)
     if observation not in self.Q:
+        self.logger.info(f"random for{observation}")
         return np.random.choice(ACTIONS,p=[.2, .2, .2, .2, .1, .1])
     
+    self.logger.info(f"{self.Q[observation]}")
     self.logger.debug("Querying model for action.")
     return ACTIONS[np.argmax(self.Q[observation])]
 
@@ -81,6 +86,8 @@ def state_to_features(self,state: dict) -> np.array:
     :param game_state:  A dictionary describing the current game board.
     :return: np.array
     """
+
+
     # This is the dict before the game begins and after it ends
     if state is None:
         return None
@@ -88,63 +95,55 @@ def state_to_features(self,state: dict) -> np.array:
     
     #def state_to_features(state: dict) -> np.array:
     rows, cols = state['field'].shape[0], state['field'].shape[1]
-    observation = np.zeros([rows, cols], dtype=np.float32)
-
-    observation = state['field']*10
-
-
-    if state['coins']:
-        coins_x, coins_y = zip(*state['coins'])
-        observation[list(coins_x), list(coins_y)] = 20  # revealed coins
-
-    if state['bombs']:
-        bombs_xy, bombs_t = zip(*state['bombs'])
-        bombs_x, bombs_y = zip(*bombs_xy)
-        observation[list(bombs_x), list(bombs_y)] = [bt+1 for bt in  list(bombs_t)]
-
-    if state['self']:  # let's hope there is...
-        _, _, _, (self_x, self_y) = state['self']
-        observation[self_x, self_y] = 30
-
-    if state['others']:
-        _, _, others_bomb, others_xy = zip(*state['others'])
-        others_x, others_y = zip(*others_xy)
-        for i in range(len(others_bomb)):
-            observation[others_x[i], others_y[i]] = -40 if others_bomb[i] else -30
-
-    observation[np.where(state['explosion_map'] != 0)[1],np.where(state['explosion_map'] != 0)[0]] = -2
-
-    if state['self']:  # let's hope there is...
-        _, _, _, (self_x, self_y) = state['self']
-        observation = observation[max(1,self_x - self.limit_to):min(self_x + self.limit_to,rows-1),\
-                                   max(1,self_y - self.limit_to):min(self_y + self.limit_to,cols-1)]
-
-    def euclid(list, tuple):
-        return [np.sqrt((list[i][0] - tuple[0])**2 + (list[i][1] - tuple[1])**2) for i in range(len(list))]
-    
     playerLoc = state['self'][3]
     
     dist_to_enemy= -1
     dist_to_coin = -1
     dist_to_bomb = -1
 
-    if state['others']:
-        others = [xy for (n, s, b, xy) in state['others']]
-        dist_to_enemy = min(euclid(others,playerLoc))
+
+    observation = np.zeros([rows, cols], dtype=np.float32)
+
 
     if state['coins']:
-        dist_to_coin = min(euclid(state['coins'], playerLoc))
+        coins_x, coins_y = zip(*state['coins'])
+        dist_to_coin = h.calc_dir(state['coins'], playerLoc)
+        observation[list(coins_x), list(coins_y)] = 20  # revealed coins
 
+    if state['self']:  # let's hope there is...
+            _, _, self_bomb, (self_x, self_y) = state['self']
+            observation[self_x, self_y] = 40 if self_bomb else 30
+    
     if state['bombs']:
-        bomb_xy_list = [xy for (xy,_) in state['bombs']]
-        dist_to_bomb = min(euclid(bomb_xy_list,playerLoc))
-        
+        for bomb in state['bombs']:
+            (x,y), bt = bomb
+            blast_coord = h.get_blast_coords(x,y,state['field'])
+            #print(blast_coord.shape)
+            for coord in blast_coord:
+                observation[coord] = bt+1
+                if coord == (self_x,self_y):
+                    observation[coord] = 50
+        #dist_to_bomb = h.calc_dir(bombs_xy,playerLoc)
+
+    if state['others']:
+        _, _, others_bomb, others_xy = zip(*state['others'])
+        #print('others')
+        dist_to_enemy = h.calc_dir(others_xy,playerLoc)
+        others_x, others_y = zip(*others_xy)
+        for i in range(len(others_bomb)):
+            observation[others_x[i], others_y[i]] = -40 if others_bomb[i] else -30
+
+    observation[np.where(state['explosion_map'] != 0)[0],np.where(state['explosion_map'] != 0)[1]] = -2
+
+    observation[state['field'] != 0] = state['field'][state['field'] != 0]*10
+
+    if state['self']:  # reduce view
+        _, _, _, (self_x, self_y) = state['self']
+        observation = observation[max(1,self_x - self.limit_to):min(self_x + self.limit_to,rows),\
+                                   max(1,self_y - self.limit_to):min(self_y + self.limit_to,cols)]
+
+
     #observation += np.where(state['explosion_map'], state['explosion_map'] * -2, state['explosion_map']).reshape(rows, cols)
     #print(state['explosion_map'])
     #print(np.where(state['explosion_map'] != 0)[0])
-    #print(max(0,self_x- self.limit_to))
-    #print(observation2)
-    #observation2 = list(observation2)
-    #return hashlib.sha256(observation.tostring()).hexdigest()
-    #print(dist_to_bomb,dist_to_coin,dist_to_enemy)
-    return tuple((observation.tostring(),dist_to_coin,dist_to_enemy,dist_to_bomb)).__hash__()
+    return tuple(map(tuple,observation))
