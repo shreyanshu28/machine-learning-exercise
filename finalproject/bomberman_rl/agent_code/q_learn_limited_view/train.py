@@ -15,7 +15,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 2000  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 15000  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 REDUCED_DISTANCE_TO_NEXT_COIN_EVENT = "REDUCED_DISTANCE_TO_COIN"
 INCREASED_DISTANCE_TO_NEXT_COIN_EVENT = "INCREASED_DISTANCE_TO_COIN"
@@ -43,8 +43,9 @@ def setup_training(self):
     # (s, a, r, s')
     self.walkedTiles = []
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
-    self.alpha = 0.5
-    self.gamma = 0.1
+    self.transition_hist_size = TRANSITION_HISTORY_SIZE
+    self.alpha = 0.3
+    self.gamma = 0.8
     self.total_step = 0
 
 
@@ -65,20 +66,22 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param new_game_state: The state the agent is in now.
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
-    self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+    #self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
     # state_to_features is defined in callbacks.py
 
     events = add_events(self, old_game_state, self_action, new_game_state, events)
+    #print(self_action)
     transition = Transition(state_to_features(self,old_game_state), self_action, state_to_features(self,new_game_state), reward_from_events(self, events))
     self.transitions.append(transition)
     self.total_step += 1
-    if self.total_step % TRANSITION_HISTORY_SIZE == 0:
+    if self.total_step % self.transition_hist_size == 0:
         for trans in self.transitions:
             update_Q(self,trans)
         with open(self.file_path,"wb") as file:
             pickle.dump(self.Q, file)
-
+        self.transition_hist_size *= 2
+        self.transitions = []
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
     Called at the end of each game or when the agent died to hand out final rewards.
@@ -92,7 +95,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
+    #self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     #self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
 
     # print("end of round")
@@ -104,11 +107,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     transition = Transition(state_to_features(self,last_game_state), last_action, None, reward_from_events(self, events))
     self.transitions.append(transition)
     self.total_step += 1
-    if self.total_step % TRANSITION_HISTORY_SIZE == 0:
+    if self.total_step % self.transition_hist_size == 0:
         for trans in self.transitions:
             update_Q(self,trans)
-        with open(self.file_path, "wb") as file:
+        with open(self.file_path,"wb") as file:
             pickle.dump(self.Q, file)
+        self.transition_hist_size *= 2
+        self.transitions = []
     
 def update_Q(self, Transition):
     if Transition[0] not in self.Q:
@@ -118,8 +123,8 @@ def update_Q(self, Transition):
 
     
     action_index = ACTIONS.index(Transition[1])
-    self.Q[Transition[0]][action_index] = ((1-self.alpha)*self.Q[Transition[0]][action_index])\
-                                            + self.alpha*(Transition[3] + self.gamma*np.max(self.Q[Transition[2]]))
+    self.Q[Transition[0]][action_index] = (self.Q[Transition[0]][action_index])\
+                                            + self.alpha*(Transition[3] + self.gamma*max(self.Q[Transition[2]]) - self.Q[Transition[0]][action_index])
 
 
 def reward_from_events(self, events: List[str]) -> int:
@@ -131,35 +136,28 @@ def reward_from_events(self, events: List[str]) -> int:
     """
     game_rewards = {
         e.INVALID_ACTION: -20,
-        # e.COIN_COLLECTED: 1,
-        #e.KILLED_OPPONENT: 50,
-        e.BOMB_DROPPED: 1,
-        #e.COIN_FOUND: 10,
-        #e.SURVIVED_ROUND: 0.5,
-        e.CRATE_DESTROYED: 0.5,
+        e.COIN_COLLECTED: 1,
         e.MOVED_LEFT: -1,
         e.MOVED_RIGHT: -1,
         e.MOVED_UP: -1,
         e.MOVED_DOWN: -1,
         # e.INVALID_ACTION: -2,
-        e.WAITED: -2,
-        #e.GOT_KILLED: -100,
-        e.KILLED_SELF: -2,
-        #e.COIN_COLLECTED: 10,
-        DUMB_BOMB_EVENT: -2,
-        NEW_TILE_FOUND: 1,
-        #REDUCED_DISTANCE_TO_NEXT_COIN_EVENT: 1,
+        e.WAITED: -3,
+        e.COIN_COLLECTED: 10,
+        DUMB_BOMB_EVENT: -10,
+        NEW_TILE_FOUND: 3,
+        REDUCED_DISTANCE_TO_NEXT_COIN_EVENT: 1,
         #INCREASED_DISTANCE_TO_NEXT_COIN_EVENT: -.001,
-        INCREASED_DISTANCE_TO_BOMB_EVENT: 1,
+        #INCREASED_DISTANCE_TO_BOMB_EVENT: 2,
         #ON_DANGEROUS_FIELD_EVENT: -1,
         #WAITED_ON_DANGEROUS_FIELD_EVENT: -2,
-        #WALKED_OUT_OF_EXPLOSION_EVENT: 10
+        WALKED_OUT_OF_EXPLOSION_EVENT: 10
     }
     reward_sum = 0
     for event in events:
         if event in game_rewards:
             reward_sum += game_rewards[event]
-    self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+    #self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
 
 def add_events(self, old_game_state,self_action, new_game_state, events):
@@ -170,7 +168,7 @@ def add_events(self, old_game_state,self_action, new_game_state, events):
     if len(old_game_state['bombs']) != 0:
         bombs = [xy for (xy,t) in old_game_state['bombs']]
     
-    if self_action == 'BOMB' and old_game_state['self'][3] in [(1,1),(1,16),(16,1),(16,16)]:
+    if self_action == 'BOMB' and old_game_state['self'][3] in [(1,1),(1,old_game_state['field'].shape[1]-2),(old_game_state['field'].shape[0]-2,1),(old_game_state['field'].shape[0]-2,old_game_state['field'].shape[1]-2)]:
         events.append(DUMB_BOMB_EVENT)
     if (self_action in ['UP', 'DOWN', 'LEFT', 'RIGHT']):
         oldPlayerLoc, newPlayerLoc = old_game_state['self'][3], new_game_state['self'][3]
@@ -248,7 +246,7 @@ def add_other_transitions(self,old_game_state, new_game_state):
                 old_temp_switched['others'].append(old_me)
                 new_temp_switched['others'].append(new_me)
 
-                print(old_others_xy[i], new_others_xy[i], action)
+                #print(old_others_xy[i], new_others_xy[i], action)
                 self.transitions.append()
                 self.total_step += 1
             

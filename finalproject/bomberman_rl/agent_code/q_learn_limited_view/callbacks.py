@@ -27,15 +27,16 @@ def setup(self):
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
     continue_training = False
-    self.limit_to = 2
+    self.limit_to = 3
+    self.epsilon = 0.00001
     #file_path = f"save_files/my-saved-model_view{self.limit_to}_test.json"
-    self.file_path = f"save_files/my-saved-model_view{self.limit_to}.pt"
+    self.file_path = f"save_files/my-coin-model_view{self.limit_to}.pt"
     if not os.path.isfile(self.file_path):
-        self.logger.info("Setting up model from scratch.")
+        #self.logger.info("Setting up model from scratch.")
         weights = np.random.rand(len(ACTIONS))
         self.Q = {}
     else:
-        self.logger.info("Loading model from saved state.")
+        #self.logger.info("Loading model from saved state.")
         print(f"loaded: {self.file_path}")
         with open(self.file_path, "rb") as file:
             self.Q = pickle.load(file)
@@ -52,10 +53,10 @@ def act(self, game_state: dict) -> str:
     :return: The action to take as a string.
     """
     # todo Exploration vs exploitation
-    random_prob = 0.1
+
     #print(hashlib.sha256(state_to_features(game_state)).hexdigest())
-    if self.train and random.random() < random_prob:
-        self.logger.debug("Choosing action purely at random.")
+    if self.train and random.random() < self.epsilon:
+        #self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .15, .05])
         #use loaded model
@@ -64,11 +65,11 @@ def act(self, game_state: dict) -> str:
 
     observation = state_to_features(self,game_state)
     if observation not in self.Q:
-        self.logger.info(f"random for{observation}")
+        #self.logger.info(f"random for{observation}")
         return np.random.choice(ACTIONS,p=[.2, .2, .2, .2, .1, .1])
     
-    self.logger.info(f"{self.Q[observation]}")
-    self.logger.debug("Querying model for action.")
+    #self.logger.info(f"{self.Q[observation]}")
+    #self.logger.debug("Querying model for action.")
     return ACTIONS[np.argmax(self.Q[observation])]
 
 
@@ -96,10 +97,6 @@ def state_to_features(self,state: dict) -> np.array:
     #def state_to_features(state: dict) -> np.array:
     rows, cols = state['field'].shape[0], state['field'].shape[1]
     playerLoc = state['self'][3]
-    
-    dist_to_enemy= -1
-    dist_to_coin = -1
-    dist_to_bomb = -1
 
 
     observation = np.zeros([rows, cols], dtype=np.float32)
@@ -139,8 +136,8 @@ def state_to_features(self,state: dict) -> np.array:
 
     if state['self']:  # reduce view
         _, _, _, (self_x, self_y) = state['self']
-        observation = observation[max(1,self_x - self.limit_to):min(self_x + self.limit_to,rows),\
-                                   max(1,self_y - self.limit_to):min(self_y + self.limit_to,cols)]
+        observation = observation[max(1,self_x - self.limit_to):min(self_x + self.limit_to,rows-1),\
+                                   max(1,self_y - self.limit_to):min(self_y + self.limit_to,cols-1)]
 
 
     #observation += np.where(state['explosion_map'], state['explosion_map'] * -2, state['explosion_map']).reshape(rows, cols)
