@@ -17,9 +17,17 @@ SCENARIOS = {
         "CRATE_DENSITY": 0,
         "COIN_COUNT": 50
     },
+    "few-coins": {
+        "CRATE_DENSITY": 0,
+        "COIN_COUNT": 10
+    },
     "loot-crate": { 
         "CRATE_DENSITY": 0.75, 
         "COIN_COUNT": 50 
+    },
+    "few-crate": { 
+        "CRATE_DENSITY": 0.25, 
+        "COIN_COUNT": 10 
     }, 
     # this is the tournament game mode
     "classic": {
